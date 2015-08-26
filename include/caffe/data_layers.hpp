@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <deque>
 
 #include "hdf5.h"
 
@@ -256,6 +257,34 @@ class ImageDataLayer : public BasePrefetchingDataLayer<Dtype> {
   vector<std::pair<std::string, int> > lines_;
   int lines_id_;
 };
+
+template <typename Dtype>
+class FlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
+ public:
+  explicit FlowDataLayer(const LayerParameter& param)
+      : BasePrefetchingDataLayer<Dtype>(param) {}
+  virtual ~FlowDataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "FlowData"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int ExactNumTopBlobs() const { return 2; }
+ protected:
+  shared_ptr<Caffe::RNG> prefetch_rng_;
+  virtual void ShuffleImages();
+  virtual void load_batch(Batch<Dtype>* batch);
+
+  int get_next_image_set(int lines_id, int num_stack_frames);
+
+  vector<std::pair<std::string, int> > lines_;
+  int lines_id_;
+  vector<std::string> flow_x_images_;
+  vector<std::string> flow_y_images_;
+  int images_id_;
+  std::deque<cv::Mat> flow_matrices_;
+};
+
 
 /**
  * @brief Provides data to the Net from memory.

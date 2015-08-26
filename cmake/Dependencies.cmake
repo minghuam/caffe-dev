@@ -1,6 +1,10 @@
 # This list is required for static linking and exported to CaffeConfig.cmake
 set(Caffe_LINKER_LIBS "")
 
+# ---[ Poco
+find_library(POCO_FOUNDATION PocoFoundation)
+list(APPEND Caffe_LINKER_LIBS ${POCO_FOUNDATION})
+
 # ---[ Boost
 find_package(Boost 1.46 REQUIRED COMPONENTS system thread)
 include_directories(SYSTEM ${Boost_INCLUDE_DIR})
