@@ -38,21 +38,44 @@ void FlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   std::ifstream infile(source.c_str());
   string filename;
   int label;
+
+  vector<std::pair<std::string, int> > lines;
   while (infile >> filename >> label) {
-    lines_.push_back(std::make_pair(filename, label));
+    lines.push_back(std::make_pair(filename, label));
   }
+  LOG(INFO) << "A total of " << lines.size() << " videos.";
 
-  if (this->layer_param_.image_data_param().shuffle()) {
-    // randomly shuffle data
-    LOG(INFO) << "Shuffling data";
-    const unsigned int prefetch_rng_seed = caffe_rng_rand();
-    prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
-    ShuffleImages();
+  std::vector<std::string> flow_x_images;
+  std::vector<std::string> flow_y_images;
+  for(int i = 0; i < (int)lines.size(); i++){
+    flow_x_images.clear();
+    flow_y_images.clear();
+    ls_files(flow_x_images, lines[i].first + "/x", "jpg");
+    if(flow_x_images.size() < num_stack_frames){
+        continue;
+    }
+    ls_files(flow_y_images, lines[i].first + "/y", "jpg");
+
+    int index = 0;
+    std::deque<std::pair<std::string, std::string> > image_set;
+    while(true){
+      while(image_set.size() < num_stack_frames){
+          image_set.push_back(std::make_pair(flow_x_images[index], flow_y_images[index]));
+          index++;
+      }
+      flow_images_.push_back(std::make_pair(image_set, lines[i].second));
+      image_set.pop_front();
+      if(index >= flow_x_images.size()){
+          break;
+      }
+    }
   }
-  LOG(INFO) << "A total of " << lines_.size() << " videos.";
+  LOG(INFO) << "Total number of stacked blobs: " << flow_images_.size();
 
-  lines_id_ = get_next_image_set(0, num_stack_frames);
-  images_id_ = 0;
+  flow_set_id_ = 0;
+  const unsigned int prefetch_rng_seed = caffe_rng_rand();
+  prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
+  ShuffleImages();
 
   int width = image_width;
   int height = image_height;
@@ -85,32 +108,10 @@ void FlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
 
 template <typename Dtype>
 void FlowDataLayer<Dtype>::ShuffleImages() {
-  caffe::rng_t* prefetch_rng =
+    LOG(INFO) << "shuffle images";
+    caffe::rng_t* prefetch_rng =
       static_cast<caffe::rng_t*>(prefetch_rng_->generator());
-  shuffle(lines_.begin(), lines_.end(), prefetch_rng);
-}
-
-template <typename Dtype>
-int FlowDataLayer<Dtype>::get_next_image_set(int lines_id, int num_stack_frames) {
-  int start_lines_id = lines_id;
-  while(true){
-    flow_x_images_.clear();
-    flow_y_images_.clear();
-    ls_files(flow_x_images_, lines_[lines_id].first + "/x", "jpg");
-    ls_files(flow_y_images_, lines_[lines_id].first + "/y", "jpg");
-    if(flow_x_images_.size() >= num_stack_frames){
-      break;
-    }
-    lines_id++;
-    if(lines_id >= lines_.size()){
-      lines_id = 0;
-    }
-    if(lines_id == start_lines_id){
-      LOG(ERROR) << "None of the video has enough frames!";
-      return -1;
-    }
-  }
-  return lines_id;
+    shuffle(flow_images_.begin(), flow_images_.end(), prefetch_rng);
 }
 
 // This function is called on prefetch thread
@@ -125,7 +126,7 @@ void FlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   const int new_width = flow_data_param.new_width();
   const int num_stack_frames = flow_data_param.num_stack_frames();
   const int mean = flow_data_param.mean();
-  const bool shuffle = flow_data_param.shuffle();
+  const bool show_level = flow_data_param.show_level();
 
   int width = image_width;
   int height = image_height;
@@ -134,45 +135,56 @@ void FlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     height = new_height;
   }
 
-  int num_stack_images = num_stack_frames * 2;
-  this->transformed_data_.Reshape(1, num_stack_images, height, width);
-  batch->data_.Reshape(batch_size, num_stack_images, height, width);
+  this->transformed_data_.Reshape(1, num_stack_frames * 2, height, width);
+  batch->data_.Reshape(batch_size, num_stack_frames * 2, height, width);
 
   Dtype* prefetch_data = batch->data_.mutable_cpu_data();
   Dtype* prefetch_label = batch->label_.mutable_cpu_data();
 
   for(int item_id = 0; item_id < batch_size; item_id++){
-    // set labels
-    prefetch_label[item_id] = lines_[lines_id_].second;
+    // set label
+    prefetch_label[item_id] = flow_images_[flow_set_id_].second;
 
-    // fill flow images
-    while(flow_matrices_.size() < num_stack_images){
-      cv::Mat Ix = cv::imread(flow_x_images_[images_id_]);
-      cv::Mat Iy = cv::imread(flow_y_images_[images_id_]);
-
-      if(new_height * new_width != 0){
-        cv::resize(Ix, Ix, cv::Size(new_width, new_height));
-        cv::resize(Iy, Iy, cv::Size(new_width, new_height));
-      }
-
-      flow_matrices_.push_back(Ix);
-      flow_matrices_.push_back(Iy);
-      images_id_++;
-    }
-    // pack to a datum
+    // pack a datum
+    std::deque<std::pair<std::string, std::string> >& image_set =
+            flow_images_[flow_set_id_].first;
     Datum datum;
-    datum.set_channels(num_stack_images);
+    datum.set_channels(num_stack_frames * 2);
     datum.set_height(height);
     datum.set_width(width);
+    datum.clear_data();
+    datum.clear_float_data();
 
-    for(int i = 0; i < (int)flow_matrices_.size(); i++){
-      cv::Mat& I = flow_matrices_[i];
-      for(int h = 0; h < I.rows; ++h){
-        for(int w = 0; w < I.cols; ++w){
-          float val = static_cast<float>(I.at<uchar>(h, w, 0)) - mean;
-          datum.add_float_data(val);
+    for(int i = 0; i < (int)image_set.size(); i++){
+        cv::Mat Ix = cv::imread(image_set[i].first, CV_LOAD_IMAGE_GRAYSCALE);
+        cv::Mat Iy = cv::imread(image_set[i].second, CV_LOAD_IMAGE_GRAYSCALE);
+        if(new_height * new_width != 0){
+          cv::resize(Ix, Ix, cv::Size(new_width, new_height));
+          cv::resize(Iy, Iy, cv::Size(new_width, new_height));
         }
-      }
+
+        if(show_level > 0){
+          cv::imshow("Ix", Ix);
+          cv::imshow("Iy", Iy);
+          if(show_level == 1){
+            cv::waitKey(30);
+          }else{
+            cv::waitKey(0);
+          }
+        }
+
+        for(int h = 0; h < Ix.rows; ++h){
+          for(int w = 0; w < Ix.cols; ++w){
+            float val = (float)Ix.at<uchar>(h, w) - mean;
+            datum.add_float_data(val);
+          }
+        }
+        for(int h = 0; h < Iy.rows; ++h){
+          for(int w = 0; w < Iy.cols; ++w){
+            float val = (float)Iy.at<uchar>(h, w) - mean;
+            datum.add_float_data(val);
+          }
+        }
     }
 
     // set data
@@ -180,25 +192,11 @@ void FlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     this->transformed_data_.set_cpu_data(prefetch_data + offset);
     this->data_transformer_->Transform(datum, &(this->transformed_data_));
 
-    // remove oldest frame
-    flow_matrices_.pop_front();
-    flow_matrices_.pop_front();
-
-    if(images_id_ >= flow_x_images_.size()){
-      // load next set of images
-      int prev_lines_id = lines_id_;
-      lines_id_++;
-      if(lines_id_ >= lines_.size()){
-        lines_id_ = 0;
-      }
-      lines_id_ = get_next_image_set(lines_id_, num_stack_frames);
-      if(lines_id_ < prev_lines_id && shuffle){
-        ShuffleImages();
-      }
-      flow_matrices_.clear();
-      images_id_ = 0;
+    flow_set_id_++;
+    if(flow_set_id_ >= flow_images_.size()){
+      flow_set_id_ = 0;
+      ShuffleImages();
     }
-
   }
 }
 

@@ -248,8 +248,35 @@ int test() {
         caffe_net.Forward(bottom_vec, &iter_loss);
     loss += iter_loss;
     int idx = 0;
+//    LOG(INFO) << "result size: " << result.size();
+//    LOG(INFO) << "num:" << result[1]->num();
+//    LOG(INFO) << "channels:" << result[1]->channels();
+//    LOG(INFO) << "height:" << result[1]->height();
+//    LOG(INFO) << "width:" << result[1]->width();
+
+    const float* label_vec = result[0]->cpu_data();
+    const float* score_vec = result[1]->cpu_data();
+    for(int n = 0; n < result[1]->num(); n++){
+        float sum = 0.0f;
+        float max_score = 0.0f;
+        int max_index = 0;
+        for(int c = 0; c < result[1]->channels(); c++){
+            float score = score_vec[result[1]->offset(n, c)];
+            sum += score;
+            if(max_score < score){
+                max_score = score;
+                max_index = c;
+            }
+        }
+//        LOG(INFO) << "prob sum: " << sum \
+//                  << ", max_score: " << max_score \
+//                  << ", max_index: " << max_index \
+//                  << ", label: " << label_vec[n];
+    }
+
     for (int j = 0; j < result.size(); ++j) {
       const float* result_vec = result[j]->cpu_data();
+      LOG(INFO) << "result " << j << " count:" << result[j]->count();
       for (int k = 0; k < result[j]->count(); ++k, ++idx) {
         const float score = result_vec[k];
         if (i == 0) {
@@ -264,6 +291,7 @@ int test() {
       }
     }
   }
+
   loss /= FLAGS_iterations;
   LOG(INFO) << "Loss: " << loss;
   for (int i = 0; i < test_score.size(); ++i) {
@@ -277,7 +305,7 @@ int test() {
       loss_msg_stream << " (* " << loss_weight
                       << " = " << loss_weight * mean_score << " loss)";
     }
-    LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
+    //LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
   }
 
   return 0;

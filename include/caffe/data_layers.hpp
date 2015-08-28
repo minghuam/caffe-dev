@@ -283,6 +283,10 @@ class FlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
   vector<std::string> flow_y_images_;
   int images_id_;
   std::deque<cv::Mat> flow_matrices_;
+
+  vector<std::pair<std::deque<std::pair<std::string, std::string> >, int> > flow_images_;
+  int flow_set_id_;
+
 };
 
 

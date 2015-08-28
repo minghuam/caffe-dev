@@ -667,7 +667,7 @@ message FlowDataParameter{
   optional uint32 batch_size = 8 [default = 1];
   optional uint32 new_height = 12 [default = 0];
   optional uint32 new_width = 16 [default = 0];
-  optional bool shuffle = 20 [default = false];
+  optional uint32 show_level = 20 [default = 0];
   optional uint32 num_stack_frames = 24 [default = 10];
   optional uint32 mean = 28 [default = 128];
 }
