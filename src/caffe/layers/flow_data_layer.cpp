@@ -75,6 +75,8 @@ void FlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   flow_set_id_ = 0;
   const unsigned int prefetch_rng_seed = caffe_rng_rand();
   prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
+  const unsigned int augmentation_rng_seed = caffe_rng_rand();
+  augmentation_rng_.reset(new Caffe::RNG(augmentation_rng_seed));
   ShuffleImages();
 
   int width = image_width;
@@ -107,6 +109,13 @@ void FlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
 }
 
 template <typename Dtype>
+int FlowDataLayer<Dtype>::Rand(int n){
+  caffe::rng_t* rng =
+      static_cast<caffe::rng_t*>(augmentation_rng_->generator());
+  return ((*rng)() % n);
+}
+
+template <typename Dtype>
 void FlowDataLayer<Dtype>::ShuffleImages() {
     LOG(INFO) << "shuffle images";
     caffe::rng_t* prefetch_rng =
@@ -127,6 +136,9 @@ void FlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   const int num_stack_frames = flow_data_param.num_stack_frames();
   const int mean = flow_data_param.mean();
   const bool show_level = flow_data_param.show_level();
+  const int augmentation_type = flow_data_param.augmentation_type();
+  const int resize_width = flow_data_param.resize_width();
+  const int resize_height = flow_data_param.resize_height();
 
   int width = image_width;
   int height = image_height;
@@ -155,12 +167,28 @@ void FlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     datum.clear_data();
     datum.clear_float_data();
 
+    int y_off = Rand(resize_height - new_height + 1);
+    int x_off = Rand(resize_width - new_width + 1);
+    cv::Rect crop_roi(x_off, y_off, new_width, new_height);
+    bool do_mirror = (bool)Rand(2);
+
     for(int i = 0; i < (int)image_set.size(); i++){
         cv::Mat Ix = cv::imread(image_set[i].first, CV_LOAD_IMAGE_GRAYSCALE);
         cv::Mat Iy = cv::imread(image_set[i].second, CV_LOAD_IMAGE_GRAYSCALE);
-        if(new_height * new_width != 0){
-          cv::resize(Ix, Ix, cv::Size(new_width, new_height));
-          cv::resize(Iy, Iy, cv::Size(new_width, new_height));
+
+        if(augmentation_type == 0){
+            if(new_height * new_width != 0){
+              cv::resize(Ix, Ix, cv::Size(new_width, new_height));
+              cv::resize(Iy, Iy, cv::Size(new_width, new_height));
+            }
+        }else if(augmentation_type == 1){
+            cv::resize(Ix, Ix, cv::Size(resize_width, resize_height));
+            cv::resize(Iy, Iy, cv::Size(resize_width, resize_height));
+            Ix = Ix(crop_roi);
+            Iy = Iy(crop_roi);
+//            if(do_mirror){
+//                Ix = 255 - Ix;
+//            }
         }
 
         if(show_level > 0){

@@ -271,18 +271,17 @@ class FlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 0; }
   virtual inline int ExactNumTopBlobs() const { return 2; }
  protected:
+
+
   shared_ptr<Caffe::RNG> prefetch_rng_;
+  shared_ptr<Caffe::RNG> augmentation_rng_;
+
+  virtual int Rand(int n);
   virtual void ShuffleImages();
   virtual void load_batch(Batch<Dtype>* batch);
 
-  int get_next_image_set(int lines_id, int num_stack_frames);
-
   vector<std::pair<std::string, int> > lines_;
   int lines_id_;
-  vector<std::string> flow_x_images_;
-  vector<std::string> flow_y_images_;
-  int images_id_;
-  std::deque<cv::Mat> flow_matrices_;
 
   vector<std::pair<std::deque<std::pair<std::string, std::string> >, int> > flow_images_;
   int flow_set_id_;

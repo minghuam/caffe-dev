@@ -670,6 +670,9 @@ message FlowDataParameter{
   optional uint32 show_level = 20 [default = 0];
   optional uint32 num_stack_frames = 24 [default = 10];
   optional uint32 mean = 28 [default = 128];
+  optional uint32 augmentation_type = 32 [default = 0];
+  optional uint32 resize_width = 36 [default = 256];
+  optional uint32 resize_height = 40 [default = 256];
 }
 
 message InfogainLossParameter {
