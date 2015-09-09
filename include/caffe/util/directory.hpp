@@ -17,5 +17,7 @@ void ls_files(std::vector<std::string> &files, \
 
 }
 
+std::string join_path(std::string &parent, std::string &child);
+
 #endif // DIRECTORY_HPP
 
