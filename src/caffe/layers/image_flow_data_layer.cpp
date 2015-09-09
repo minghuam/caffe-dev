@@ -91,14 +91,27 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
 
       image_flow_pairs_.push_back(std::make_pair(flow_img_pair, labels[i]));
 
+      /*
+      LOG(INFO) << flow_img_pair.first.size();
+      LOG(INFO) << flow_img_pair.first[num_stack_frames-1].first;
+      LOG(INFO) << flow_img_pair.second;
+      LOG(INFO) << folder_names[i] << ": " << labels[i][0] << "," \
+        << labels[i][1] << "," << labels[i][2];
+
+      cv::Mat Ix = cv::imread(flow_img_pair.first[num_stack_frames-1].first);
+      cv::Mat Iy = cv::imread(flow_img_pair.first[num_stack_frames-1].second);
+      cv::Mat I = cv::imread(flow_img_pair.second);
+      cv::imshow("Ix", Ix);
+      cv::imshow("Iy", Iy);
+      cv::imshow("I", I);
+      cv::waitKey(0);
+      */
+
       flow_q.pop_front();
       if(flow_index >= flow_x_images.size()){
           break;
       }
     }
-
-    LOG(INFO) << folder_names[i] << ": " << labels[i][0] << "," \
-        << labels[i][1] << "," << labels[i][2];
   }
   LOG(INFO) << "Total number of stacked blobs: " << image_flow_pairs_.size();
 
@@ -113,9 +126,9 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
   int height = I_shape[2];
   int width = I_shape[3];
 
-  this->transformed_data_.Reshape(1, num_stack_frames * 2 + 3, height, width);
+  this->transformed_data_.Reshape(1, num_stack_frames * 2, height, width);
 
-  int shape_array[4] = {batch_size, num_stack_frames * 2 + 3, height, width};
+  int shape_array[4] = {batch_size, num_stack_frames * 2, height, width};
   vector<int> top_shape(&shape_array[0], &shape_array[0] + 4);
   for(int i = 0; i < this->PREFETCH_COUNT; ++i){
     this->prefetch_[i].data_.Reshape(top_shape);
@@ -125,7 +138,7 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
       << top[0]->channels() << "," << top[0]->height() << ","
       << top[0]->width();
 
-  int label_shape_array[4] = {batch_size, 3, 1, 1};
+  int label_shape_array[4] = {batch_size, 1, 1, 1};
   vector<int> label_shape(&label_shape_array[0], &label_shape_array[0] + 4);
   for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
     this->prefetch_[i].label_.Reshape(label_shape);
@@ -166,8 +179,8 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   int height = I_shape[2];
   int width = I_shape[3];
 
-  this->transformed_data_.Reshape(1, num_stack_frames * 2 + 3, height, width);
-  batch->data_.Reshape(batch_size, num_stack_frames * 2 + 3, height, width);
+  this->transformed_data_.Reshape(1, num_stack_frames * 2, height, width);
+  batch->data_.Reshape(batch_size, num_stack_frames * 2, height, width);
 
   Dtype* prefetch_data = batch->data_.mutable_cpu_data();
   Dtype* prefetch_label = batch->label_.mutable_cpu_data();
@@ -179,19 +192,20 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
     // set label
     //prefetch_label[item_id] = flow_images_[flow_set_id_].second;
-    prefetch_label[3 * item_id + 0] = labels[0];
-    prefetch_label[3 * item_id + 1] = labels[1];
-    prefetch_label[3 * item_id + 2] = labels[3];
+    prefetch_label[1 * item_id + 0] = labels[0];
+    //prefetch_label[3 * item_id + 1] = labels[1];
+    //prefetch_label[3 * item_id + 2] = labels[3];
 
     // pack a datum
     Datum datum;
-    datum.set_channels(num_stack_frames * 2 + 3);
+    datum.set_channels(num_stack_frames * 2);
     datum.set_height(height);
     datum.set_width(width);
     datum.clear_data();
     datum.clear_float_data();
 
     // flow data
+
     std::deque<std::pair<std::string, std::string> >& flow_q = flow_image_pair.first;
     for(int i = 0; i < (int)flow_q.size(); i++){
 
@@ -229,11 +243,15 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
     // rgb image
     cv::Mat I = cv::imread(flow_image_pair.second);
-    for(int h = 0; h < I.rows; ++h){
-      for(int w = 0; w < I.cols; ++w){
-        for(int c = 0; c < I.channels(); ++c){
-          datum.add_float_data((float)I.at<cv::Vec3b>(h, w)[c] - \
-                               image_mean_.data_at(0, c, h, w));
+    for(int c = 0; c < I.channels(); ++c){
+      for(int h = 0; h < I.rows; ++h){
+        for(int w = 0; w < I.cols; ++w){
+         ;//datum.add_float_data((float)I.at<cv::Vec3b>(h, w)[c] - \
+                               image_mean_.data_at(0, c, h, w));         
+          //int index = ((20 + c) * I.rows + h) * I.cols + w;
+          //float val = (float)I.at<cv::Vec3b>(h,w)[c] - \
+                                image_mean_.data_at(0, c, h, w);
+          //datum.set_float_data(index, val);
         }
       }
     }
