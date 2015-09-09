@@ -45,6 +45,7 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
   vector<vector<int> > labels;
 
   LOG(INFO) << "Opening file " << source;
+  LOG(INFO) << "Mean file " << mean_file;
   std::ifstream in_file(source.c_str());
   while(in_file >> folder_name >> verb_label >> obj_label >> action_label){
       folder_names.push_back(folder_name);
@@ -95,6 +96,9 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
           break;
       }
     }
+
+    LOG(INFO) << folder_names[i] << ": " << labels[i][0] << "," \
+        << labels[i][1] << "," << labels[i][2];
   }
   LOG(INFO) << "Total number of stacked blobs: " << image_flow_pairs_.size();
 
@@ -151,7 +155,6 @@ void ImageFlowDataLayer<Dtype>::ShuffleImages() {
 // This function is called on prefetch thread
 template <typename Dtype>
 void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
-
   ImageFlowDataParameter data_param = this->layer_param_.image_flow_data_param();
   const int batch_size = data_param.batch_size();
   const int num_stack_frames = data_param.num_stack_frames();
@@ -170,7 +173,7 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   Dtype* prefetch_label = batch->label_.mutable_cpu_data();
 
   for(int item_id = 0; item_id < batch_size; item_id++){
-
+    
     std::pair<FLOW_Q, std::string>& flow_image_pair = image_flow_pairs_[image_flow_pair_id_].first;
     std::vector<int>& labels = image_flow_pairs_[image_flow_pair_id_].second;
 
@@ -191,6 +194,10 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     // flow data
     std::deque<std::pair<std::string, std::string> >& flow_q = flow_image_pair.first;
     for(int i = 0; i < (int)flow_q.size(); i++){
+
+        //LOG(INFO) << "i: " << i << ": " << flow_q[i].first;
+        //LOG(INFO) << "i: " << i << ": " << flow_q[i].second;
+
         cv::Mat Ix = cv::imread(flow_q[i].first, CV_LOAD_IMAGE_GRAYSCALE);
         cv::Mat Iy = cv::imread(flow_q[i].second, CV_LOAD_IMAGE_GRAYSCALE);
 
@@ -217,13 +224,15 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
           }
         }
     }
+
+    //LOG(INFO) << "rgb: " << flow_image_pair.second;
+
     // rgb image
     cv::Mat I = cv::imread(flow_image_pair.second);
     for(int h = 0; h < I.rows; ++h){
       for(int w = 0; w < I.cols; ++w){
         for(int c = 0; c < I.channels(); ++c){
-          int index = (c * I.rows + h) * I.cols + w;
-          datum.set_float_data(index, (float)I.at<vector<uchar> >(h, w)[c] - \
+          datum.add_float_data((float)I.at<cv::Vec3b>(h, w)[c] - \
                                image_mean_.data_at(0, c, h, w));
         }
       }
