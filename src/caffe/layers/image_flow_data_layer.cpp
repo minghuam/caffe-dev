@@ -26,10 +26,11 @@ ImageFlowDataLayer<Dtype>::~ImageFlowDataLayer<Dtype>() {
 template <typename Dtype>
 void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  ImageFlowDataParameter& data_param = this->layer_param_.image_flow_data_param();
+
+  ImageFlowDataParameter data_param = this->layer_param_.image_flow_data_param();
   const string& image_folder = data_param.image_folder();
   const string& flow_folder = data_param.flow_folder();
-  const string& source = data_param.image_source();
+  const string& source = data_param.source();
   const int batch_size = data_param.batch_size();
   const int num_stack_frames = data_param.num_stack_frames();
   const string& mean_file = data_param.image_mean_file();
@@ -47,9 +48,11 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
   std::ifstream in_file(source.c_str());
   while(in_file >> folder_name >> verb_label >> obj_label >> action_label){
       folder_names.push_back(folder_name);
-      labels.push_back(verb_label);
-      labels.push_back(obj_label);
-      labels.push_back(action_label);
+      vector<int> v;
+      v.push_back(verb_label);
+      v.push_back(obj_label);
+      v.push_back(action_label);
+      labels.push_back(v);
   }
 
   std::vector<std::string> rgb_images;
@@ -60,8 +63,10 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
     flow_x_images.clear();
     flow_y_images.clear();
 
-    ls_files(rgb_images, join_path(image_folder, folder_names[i]), "jpg");
-    std::string flow_path = join_path(flow_folder, floder_names[i]);
+    std::string rgb_folder = join_path(image_folder, folder_names[i]);
+    ls_files(rgb_images, rgb_folder, "jpg");
+
+    std::string flow_path = join_path(flow_folder, folder_names[i]);
     ls_files(flow_x_images, join_path(flow_path, "x"), "jpg");
     if(flow_x_images.size() < num_stack_frames){
         continue;
@@ -91,7 +96,7 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
       }
     }
   }
-  LOG(INFO) << "Total number of stacked blobs: " << flow_images_.size();
+  LOG(INFO) << "Total number of stacked blobs: " << image_flow_pairs_.size();
 
   image_flow_pair_id_ = 0;
   const unsigned int prefetch_rng_seed = caffe_rng_rand();
@@ -129,9 +134,10 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
 
 template <typename Dtype>
 int ImageFlowDataLayer<Dtype>::Rand(int n){
-  caffe::rng_t* rng =
-      static_cast<caffe::rng_t*>(augmentation_rng_->generator());
-  return ((*rng)() % n);
+  //caffe::rng_t* rng =
+  //    static_cast<caffe::rng_t*>(augmentation_rng_->generator());
+  //return ((*rng)() % n);
+  return 0;
 }
 
 template <typename Dtype>
@@ -139,7 +145,7 @@ void ImageFlowDataLayer<Dtype>::ShuffleImages() {
     LOG(INFO) << "shuffle images";
     caffe::rng_t* prefetch_rng =
       static_cast<caffe::rng_t*>(prefetch_rng_->generator());
-    shuffle(flow_images_.begin(), flow_images_.end(), prefetch_rng);
+    shuffle(image_flow_pairs_.begin(), image_flow_pairs_.end(), prefetch_rng);
 }
 
 // This function is called on prefetch thread
@@ -152,7 +158,7 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   const int flow_mean = data_param.flow_mean();
   const bool show_level = data_param.show_level();
 
-  cv::Mat I = cv::imread(image_flow_pairs_[image_flow_pair_id].first.second);
+  cv::Mat I = cv::imread(image_flow_pairs_[image_flow_pair_id_].first.second);
   vector<int> I_shape = this->data_transformer_->InferBlobShape(I);
   int height = I_shape[2];
   int width = I_shape[3];
@@ -166,7 +172,7 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   for(int item_id = 0; item_id < batch_size; item_id++){
 
     std::pair<FLOW_Q, std::string>& flow_image_pair = image_flow_pairs_[image_flow_pair_id_].first;
-    std::vector<int>& labels = image_flow_pairs_[image_flow_pair_id_];
+    std::vector<int>& labels = image_flow_pairs_[image_flow_pair_id_].second;
 
     // set label
     //prefetch_label[item_id] = flow_images_[flow_set_id_].second;
@@ -217,7 +223,7 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       for(int w = 0; w < I.cols; ++w){
         for(int c = 0; c < I.channels(); ++c){
           int index = (c * I.rows + h) * I.cols + w;
-          datum.set_float_data(index, (float)I.at<uchar>(h, w)[c] - \
+          datum.set_float_data(index, (float)I.at<vector<uchar> >(h, w)[c] - \
                                image_mean_.data_at(0, c, h, w));
         }
       }
@@ -228,9 +234,9 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     this->transformed_data_.set_cpu_data(prefetch_data + offset);
     this->data_transformer_->Transform(datum, &(this->transformed_data_));
 
-    flow_set_id_++;
-    if(flow_set_id_ >= flow_images_.size()){
-      flow_set_id_ = 0;
+    image_flow_pair_id_++;
+    if(image_flow_pair_id_ >= image_flow_pairs_.size()){
+      image_flow_pair_id_ = 0;
       ShuffleImages();
     }
   }

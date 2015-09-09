@@ -15,9 +15,10 @@ void ls_files(std::vector<std::string> &files, \
               const std::string& extension, \
               bool recursive = false);
 
-}
+std::string join_path(const std::string& parent, \
+                      const std::string& child);
 
-std::string join_path(std::string &parent, std::string &child);
+}
 
 #endif // DIRECTORY_HPP
 
