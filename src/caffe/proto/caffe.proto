@@ -386,6 +386,7 @@ message LayerParameter {
   optional TileParameter tile_param = 138;
   optional WindowDataParameter window_data_param = 129;
   optional FlowDataParameter flow_data_param = 140;
+  optional ImageFlowDataParameter image_flow_data_param = 141;
 }
 
 // Message that stores parameters used to apply transformation
@@ -673,6 +674,18 @@ message FlowDataParameter{
   optional uint32 augmentation_type = 32 [default = 0];
   optional uint32 resize_width = 36 [default = 256];
   optional uint32 resize_height = 40 [default = 256];
+}
+
+message ImageFlowDataParameter{
+  optional string image_folder = 15;
+  optional string flow_folder = 16;
+  optional string source = 1;
+  optional uint32 batch_size = 3 [default = 1];
+  optional uint32 show_level = 4 [default = 0];
+  optional uint32 num_stack_frames = 5 [default = 10];
+  optional uint32 flow_mean = 6 [default = 128];
+  optional string image_mean_file = 13;
+  optional bool shuffle = 14 [default = false];
 }
 
 message InfogainLossParameter {

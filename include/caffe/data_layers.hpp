@@ -289,6 +289,35 @@ class FlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
 };
 
 
+template <typename Dtype>
+class ImageFlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
+ public:
+  explicit ImageFlowDataLayer(const LayerParameter& param)
+      : BasePrefetchingDataLayer<Dtype>(param) {}
+  virtual ~ImageFlowDataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "ImageFlowData"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int ExactNumTopBlobs() const { return 2; }
+ protected:
+
+  shared_ptr<Caffe::RNG> prefetch_rng_;
+
+  virtual int Rand(int n);
+  virtual void ShuffleImages();
+  virtual void load_batch(Batch<Dtype>* batch);
+
+  typedef std::deque<std::pair<std::string, std::string> > FLOW_Q;
+  vector<std::pair<std::pair<FLOW_Q, std::string>, vector<int> > > image_flow_pairs_;
+  int image_flow_pair_id_;
+  Blob<Dtype> image_mean_;
+
+};
+
+
+
 /**
  * @brief Provides data to the Net from memory.
  *

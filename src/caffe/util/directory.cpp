@@ -56,4 +56,11 @@ void ls_files(std::vector<std::string>& files, \
     std::sort(files.begin(), files.end());
 }
 
+std::string join_path(std::string &parent, std::string &child){
+    Poco::Path poco_parent(parent);
+    Poco::Path poco_child(child);
+    Poco::Path joined_path = poco_parent.append(poco_child);
+    return joined_path.absolute().toString();
+}
+
 } // end of namespace
