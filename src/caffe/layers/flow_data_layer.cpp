@@ -27,10 +27,6 @@ template <typename Dtype>
 void FlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   const int batch_size = this->layer_param_.flow_data_param().batch_size();
-  const int image_height = this->layer_param_.flow_data_param().image_height();
-  const int image_width = this->layer_param_.flow_data_param().image_width();
-  const int new_height = this->layer_param_.flow_data_param().new_height();
-  const int new_width  = this->layer_param_.flow_data_param().new_width();
   const int num_stack_frames = this->layer_param_.flow_data_param().num_stack_frames();
 
   const string& source = this->layer_param_.flow_data_param().source();
@@ -75,16 +71,12 @@ void FlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   flow_set_id_ = 0;
   const unsigned int prefetch_rng_seed = caffe_rng_rand();
   prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
-  const unsigned int augmentation_rng_seed = caffe_rng_rand();
-  augmentation_rng_.reset(new Caffe::RNG(augmentation_rng_seed));
   ShuffleImages();
 
-  int width = image_width;
-  int height = image_height;
-  if(new_height * new_width != 0){
-    width = new_width;
-    height = new_height;
-  }
+  cv::Mat I = cv::imread(flow_x_images[0]);
+  vector<int> I_shape = this->data_transformer_->InferBlobShape(I);
+  int height = I_shape[2];
+  int width = I_shape[3];
 
   this->transformed_data_.Reshape(1, num_stack_frames * 2, height, width);
 
@@ -129,23 +121,16 @@ void FlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
   FlowDataParameter flow_data_param = this->layer_param_.flow_data_param();
   const int batch_size = flow_data_param.batch_size();
-  const int image_height = flow_data_param.image_height();
-  const int image_width = flow_data_param.image_width();
-  const int new_height = flow_data_param.new_height();
-  const int new_width = flow_data_param.new_width();
   const int num_stack_frames = flow_data_param.num_stack_frames();
   const int mean = flow_data_param.mean();
   const bool show_level = flow_data_param.show_level();
-  const int augmentation_type = flow_data_param.augmentation_type();
-  const int resize_width = flow_data_param.resize_width();
-  const int resize_height = flow_data_param.resize_height();
 
-  int width = image_width;
-  int height = image_height;
-  if(new_height * new_width != 0){
-    width = new_width;
-    height = new_height;
-  }
+  cv::Mat I = cv::imread(flow_images_[0].first[0].first);
+  vector<int> I_shape = this->data_transformer_->InferBlobShape(I);
+  int input_height = I.rows;
+  int input_width = I.cols;
+  int height = I_shape[2];
+  int width = I_shape[3];
 
   this->transformed_data_.Reshape(1, num_stack_frames * 2, height, width);
   batch->data_.Reshape(batch_size, num_stack_frames * 2, height, width);
@@ -162,34 +147,14 @@ void FlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
             flow_images_[flow_set_id_].first;
     Datum datum;
     datum.set_channels(num_stack_frames * 2);
-    datum.set_height(height);
-    datum.set_width(width);
+    datum.set_height(input_height);
+    datum.set_width(input_width);
     datum.clear_data();
     datum.clear_float_data();
-
-    int y_off = Rand(resize_height - new_height + 1);
-    int x_off = Rand(resize_width - new_width + 1);
-    cv::Rect crop_roi(x_off, y_off, new_width, new_height);
-    bool do_mirror = (bool)Rand(2);
 
     for(int i = 0; i < (int)image_set.size(); i++){
         cv::Mat Ix = cv::imread(image_set[i].first, CV_LOAD_IMAGE_GRAYSCALE);
         cv::Mat Iy = cv::imread(image_set[i].second, CV_LOAD_IMAGE_GRAYSCALE);
-
-        if(augmentation_type == 0){
-            if(new_height * new_width != 0){
-              cv::resize(Ix, Ix, cv::Size(new_width, new_height));
-              cv::resize(Iy, Iy, cv::Size(new_width, new_height));
-            }
-        }else if(augmentation_type == 1){
-            cv::resize(Ix, Ix, cv::Size(resize_width, resize_height));
-            cv::resize(Iy, Iy, cv::Size(resize_width, resize_height));
-            Ix = Ix(crop_roi);
-            Iy = Iy(crop_roi);
-//            if(do_mirror){
-//                Ix = 255 - Ix;
-//            }
-        }
 
         if(show_level > 0){
           cv::imshow("Ix", Ix);

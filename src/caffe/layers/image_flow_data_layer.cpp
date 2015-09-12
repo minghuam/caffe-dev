@@ -32,8 +32,9 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
   const string& flow_folder = data_param.flow_folder();
   const string& source = data_param.source();
   const int batch_size = data_param.batch_size();
-  const int num_stack_frames = data_param.num_stack_frames();
+  int num_stack_frames = data_param.num_stack_frames();
   const string& mean_file = data_param.image_mean_file();
+    
 
   BlobProto blob_proto;
   ReadProtoFromBinaryFileOrDie(mean_file.c_str(), &blob_proto);
@@ -126,9 +127,9 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
   int height = I_shape[2];
   int width = I_shape[3];
 
-  this->transformed_data_.Reshape(1, num_stack_frames * 2, height, width);
+  this->transformed_data_.Reshape(1, num_stack_frames * 2 + 3, height, width);
 
-  int shape_array[4] = {batch_size, num_stack_frames * 2, height, width};
+  int shape_array[4] = {batch_size, num_stack_frames * 2 + 3, height, width};
   vector<int> top_shape(&shape_array[0], &shape_array[0] + 4);
   for(int i = 0; i < this->PREFETCH_COUNT; ++i){
     this->prefetch_[i].data_.Reshape(top_shape);
@@ -138,8 +139,9 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
       << top[0]->channels() << "," << top[0]->height() << ","
       << top[0]->width();
 
-  int label_shape_array[4] = {batch_size, 1, 1, 1};
+  int label_shape_array[4] = {batch_size, 3, 1, 1};
   vector<int> label_shape(&label_shape_array[0], &label_shape_array[0] + 4);
+  //vector<int> label_shape(1, batch_size);
   for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
     this->prefetch_[i].label_.Reshape(label_shape);
   }
@@ -176,11 +178,13 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
   cv::Mat I = cv::imread(image_flow_pairs_[image_flow_pair_id_].first.second);
   vector<int> I_shape = this->data_transformer_->InferBlobShape(I);
+  int input_height = I.rows;
+  int input_width = I.cols;
   int height = I_shape[2];
   int width = I_shape[3];
 
-  this->transformed_data_.Reshape(1, num_stack_frames * 2, height, width);
-  batch->data_.Reshape(batch_size, num_stack_frames * 2, height, width);
+  this->transformed_data_.Reshape(1, num_stack_frames * 2 + 3, height, width);
+  batch->data_.Reshape(batch_size, num_stack_frames * 2 + 3, height, width);
 
   Dtype* prefetch_data = batch->data_.mutable_cpu_data();
   Dtype* prefetch_label = batch->label_.mutable_cpu_data();
@@ -192,26 +196,23 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
     // set label
     //prefetch_label[item_id] = flow_images_[flow_set_id_].second;
-    prefetch_label[1 * item_id + 0] = labels[0];
-    //prefetch_label[3 * item_id + 1] = labels[1];
-    //prefetch_label[3 * item_id + 2] = labels[3];
+    prefetch_label[3 * item_id + 0] = labels[0];
+    prefetch_label[3 * item_id + 1] = labels[1];
+    prefetch_label[3 * item_id + 2] = labels[2];
 
     // pack a datum
     Datum datum;
-    datum.set_channels(num_stack_frames * 2);
-    datum.set_height(height);
-    datum.set_width(width);
+    datum.set_channels(num_stack_frames * 2 + 3);
+    datum.set_height(input_height);
+    datum.set_width(input_width);
     datum.clear_data();
     datum.clear_float_data();
 
     // flow data
-
     std::deque<std::pair<std::string, std::string> >& flow_q = flow_image_pair.first;
     for(int i = 0; i < (int)flow_q.size(); i++){
-
         //LOG(INFO) << "i: " << i << ": " << flow_q[i].first;
         //LOG(INFO) << "i: " << i << ": " << flow_q[i].second;
-
         cv::Mat Ix = cv::imread(flow_q[i].first, CV_LOAD_IMAGE_GRAYSCALE);
         cv::Mat Iy = cv::imread(flow_q[i].second, CV_LOAD_IMAGE_GRAYSCALE);
 
@@ -239,24 +240,22 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
         }
     }
 
+    //LOG(INFO) << flow_q[0].first;
     //LOG(INFO) << "rgb: " << flow_image_pair.second;
+    //LOG(INFO) << "label: " << labels[1];
 
     // rgb image
+    Dtype *mean = image_mean_.mutable_cpu_data();
     cv::Mat I = cv::imread(flow_image_pair.second);
     for(int c = 0; c < I.channels(); ++c){
       for(int h = 0; h < I.rows; ++h){
         for(int w = 0; w < I.cols; ++w){
-         ;//datum.add_float_data((float)I.at<cv::Vec3b>(h, w)[c] - \
+          datum.add_float_data((float)I.at<cv::Vec3b>(h, w)[c] - \
                                image_mean_.data_at(0, c, h, w));         
-          //int index = ((20 + c) * I.rows + h) * I.cols + w;
-          //float val = (float)I.at<cv::Vec3b>(h,w)[c] - \
-                                image_mean_.data_at(0, c, h, w);
-          //datum.set_float_data(index, val);
         }
       }
     }
-
-    // set data
+        // set data
     int offset = batch->data_.offset(item_id);
     this->transformed_data_.set_cpu_data(prefetch_data + offset);
     this->data_transformer_->Transform(datum, &(this->transformed_data_));
@@ -266,6 +265,7 @@ void ImageFlowDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       image_flow_pair_id_ = 0;
       ShuffleImages();
     }
+
   }
 }
 
