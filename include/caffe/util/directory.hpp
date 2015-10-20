@@ -18,6 +18,8 @@ void ls_files(std::vector<std::string> &files, \
 std::string join_path(const std::string& parent, \
                       const std::string& child);
 
+std::string get_basename(const std::string& file);
+
 }
 
 #endif // DIRECTORY_HPP

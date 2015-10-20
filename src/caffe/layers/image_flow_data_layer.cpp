@@ -57,10 +57,13 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
       labels.push_back(v);
   }
 
+  LOG(INFO) << "Total lines: " << folder_names.size();
+
   std::vector<std::string> rgb_images;
   std::vector<std::string> flow_x_images;
   std::vector<std::string> flow_y_images;
   for(int i = 0; i < (int)folder_names.size(); i++){
+    LOG(INFO) << i+1 << "/" << folder_names.size() << " :" << folder_names[i];
     rgb_images.clear();
     flow_x_images.clear();
     flow_y_images.clear();
@@ -84,11 +87,8 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
                                           flow_y_images[flow_index]));
           flow_index++;
       }
-
       std::pair<FLOW_Q, std::string> flow_img_pair = std::make_pair(\
                   flow_q, rgb_images[images_index]);
-
-      images_index++;
 
       image_flow_pairs_.push_back(std::make_pair(flow_img_pair, labels[i]));
 
@@ -108,9 +108,14 @@ void ImageFlowDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& botto
       cv::waitKey(0);
       */
 
+      images_index++;
+      if(images_index >= rgb_images.size()){
+        break;
+      }
+      
       flow_q.pop_front();
       if(flow_index >= flow_x_images.size()){
-          break;
+        break;
       }
     }
   }

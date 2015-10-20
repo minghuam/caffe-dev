@@ -63,4 +63,9 @@ std::string join_path(const std::string& parent, const std::string& child){
     return joined_path.absolute().toString();
 }
 
+std::string get_basename(const std::string& file){
+    Poco::Path poco_path(file);
+    return poco_path.getBaseName();
+}
+
 } // end of namespace

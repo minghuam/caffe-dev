@@ -271,8 +271,6 @@ class FlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 0; }
   virtual inline int ExactNumTopBlobs() const { return 2; }
  protected:
-
-
   shared_ptr<Caffe::RNG> prefetch_rng_;
   shared_ptr<Caffe::RNG> augmentation_rng_;
 
@@ -283,7 +281,84 @@ class FlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
   vector<std::pair<std::string, int> > lines_;
   int lines_id_;
 
-  vector<std::pair<std::deque<std::pair<std::string, std::string> >, int> > flow_images_;
+  typedef struct FlowBlob_ {
+    vector<string> flow_x_images;
+    vector<string> flow_y_images;
+    int label;
+  }FlowBlob;
+
+  //vector<std::pair<std::deque<std::pair<std::string, std::string> >, int> > flow_images_;
+  vector<FlowBlob> flow_blobs_;
+  int flow_set_id_;
+
+};
+
+template <typename Dtype>
+class DecoupleFlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
+ public:
+  explicit DecoupleFlowDataLayer(const LayerParameter& param)
+      : BasePrefetchingDataLayer<Dtype>(param) {}
+  virtual ~DecoupleFlowDataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "DecoupleFlowData"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int ExactNumTopBlobs() const { return 2; }
+ protected:
+  shared_ptr<Caffe::RNG> prefetch_rng_;
+
+  virtual void ShuffleImages();
+  virtual void load_batch(Batch<Dtype>* batch);
+
+  vector<std::pair<std::string, int> > lines_;
+  int lines_id_;
+
+  typedef struct FlowBlob_ {
+    vector<string> bx_images;
+    vector<string> by_images;
+    vector<string> hx_images;
+    vector<string> hy_images;
+    int label;
+  }FlowBlob;
+
+  //vector<std::pair<std::deque<std::pair<std::string, std::string> >, int> > flow_images_;
+  vector<FlowBlob> flow_blobs_;
+  int flow_set_id_;
+
+};
+
+
+template <typename Dtype>
+class HandFlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
+ public:
+  explicit HandFlowDataLayer(const LayerParameter& param)
+      : BasePrefetchingDataLayer<Dtype>(param) {}
+  virtual ~HandFlowDataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "HandFlowData"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int ExactNumTopBlobs() const { return 2; }
+ protected:
+  shared_ptr<Caffe::RNG> prefetch_rng_;
+
+  virtual float RandWeight();
+  virtual void ShuffleImages();
+  virtual void load_batch(Batch<Dtype>* batch);
+
+  vector<std::pair<std::string, int> > lines_;
+  int lines_id_;
+
+  typedef struct FlowBlob_ {
+    vector<string> flow_x_images;
+    vector<string> flow_y_images;
+    vector<string> hand_images;
+    int label;
+  }FlowBlob;
+
+  vector<FlowBlob> flow_blobs_;
   int flow_set_id_;
 
 };
@@ -316,6 +391,152 @@ class ImageFlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
 
 };
 
+template <typename Dtype>
+class DecoupleFlowImagePairDataLayer : public BasePrefetchingDataLayer<Dtype> {
+ public:
+  explicit DecoupleFlowImagePairDataLayer(const LayerParameter& param)
+      : BasePrefetchingDataLayer<Dtype>(param) {}
+  virtual ~DecoupleFlowImagePairDataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "DecoupleFlowImagePairData"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int ExactNumTopBlobs() const { return 2; }
+ protected:
+
+  struct FlowImageGroup {
+    vector<string> bx_images;
+    vector<string> by_images;
+    vector<string> hx_images;
+    vector<string> hy_images;
+    vector<string> images;
+    int verb_label;
+    int obj_label;
+    int action_label;
+  };
+
+  struct FlowImagePair {
+    vector<string> bx_images;
+    vector<string> by_images;
+    vector<string> hx_images;
+    vector<string> hy_images;
+    string image;
+    int verb_label;
+    int obj_label;
+    int action_label;
+  };
+
+  shared_ptr<Caffe::RNG> prefetch_rng_;
+  shared_ptr<Caffe::RNG> image_rng_;
+
+  virtual void ShuffleImages();
+  virtual void load_batch(Batch<Dtype>* batch);
+  inline int get_frame_num(const string& path);
+
+  vector<FlowImageGroup> flow_image_groups_;
+  vector<FlowImagePair> flow_image_pairs_;
+  int flow_image_pair_id_;
+  Blob<Dtype> image_mean_;
+  int num_stack_frames_;
+};
+
+
+template <typename Dtype>
+class FlowImagePairDataLayer : public BasePrefetchingDataLayer<Dtype> {
+ public:
+  explicit FlowImagePairDataLayer(const LayerParameter& param)
+      : BasePrefetchingDataLayer<Dtype>(param) {}
+  virtual ~FlowImagePairDataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "FlowImagePairData"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int ExactNumTopBlobs() const { return 2; }
+ protected:
+
+  struct FlowImageGroup {
+    vector<string> flow_x_images;
+    vector<string> flow_y_images;
+    vector<string> images;
+    int verb_label;
+    int obj_label;
+    int action_label;
+  };
+
+  struct FlowImagePair {
+    vector<string> flow_x_images;
+    vector<string> flow_y_images;
+    string image;
+    int verb_label;
+    int obj_label;
+    int action_label;
+  };
+
+  shared_ptr<Caffe::RNG> prefetch_rng_;
+  shared_ptr<Caffe::RNG> image_rng_;
+
+  virtual void ShuffleImages();
+  virtual void load_batch(Batch<Dtype>* batch);
+  inline int get_frame_num(const string& path);
+
+  vector<FlowImageGroup> flow_image_groups_;
+  vector<FlowImagePair> flow_image_pairs_;
+  int flow_image_pair_id_;
+  Blob<Dtype> image_mean_;
+  int num_stack_frames_;
+};
+
+template <typename Dtype>
+class HandFlowImagePairDataLayer : public BasePrefetchingDataLayer<Dtype> {
+ public:
+  explicit HandFlowImagePairDataLayer(const LayerParameter& param)
+      : BasePrefetchingDataLayer<Dtype>(param) {}
+  virtual ~HandFlowImagePairDataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "HandFlowImagePairData"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int ExactNumTopBlobs() const { return 2; }
+ protected:
+
+ virtual float RandWeight();
+
+  struct FlowImageGroup {
+    vector<string> flow_x_images;
+    vector<string> flow_y_images;
+    vector<string> hand_images;
+    vector<string> images;
+    int verb_label;
+    int obj_label;
+    int action_label;
+  };
+
+  struct FlowImagePair {
+    vector<string> flow_x_images;
+    vector<string> flow_y_images;
+    vector<string> hand_images;
+    string image;
+    int verb_label;
+    int obj_label;
+    int action_label;
+  };
+
+  shared_ptr<Caffe::RNG> prefetch_rng_;
+  shared_ptr<Caffe::RNG> image_rng_;
+
+  virtual void ShuffleImages();
+  virtual void load_batch(Batch<Dtype>* batch);
+  inline int get_frame_num(const string& path);
+
+  vector<FlowImageGroup> flow_image_groups_;
+  vector<FlowImagePair> flow_image_pairs_;
+  int flow_image_pair_id_;
+  Blob<Dtype> image_mean_;
+  int num_stack_frames_;
+};
 
 
 /**
