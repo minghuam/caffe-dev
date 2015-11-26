@@ -19,6 +19,8 @@
 #include "caffe/util/blocking_queue.hpp"
 #include "caffe/util/db.hpp"
 
+#include <opencv2/core/core.hpp>
+
 namespace caffe {
 
 /**
@@ -360,7 +362,8 @@ class HandFlowDataLayer : public BasePrefetchingDataLayer<Dtype> {
 
   vector<FlowBlob> flow_blobs_;
   int flow_set_id_;
-
+  //Blob<Dtype> hand_mean_;
+  cv::Mat hand_mean_;
 };
 
 
@@ -534,8 +537,9 @@ class HandFlowImagePairDataLayer : public BasePrefetchingDataLayer<Dtype> {
   vector<FlowImageGroup> flow_image_groups_;
   vector<FlowImagePair> flow_image_pairs_;
   int flow_image_pair_id_;
-  Blob<Dtype> image_mean_;
   int num_stack_frames_;
+  cv::Mat hand_mean_;
+  cv::Mat image_mean_;
 };
 
 
